@@ -1,9 +1,4 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 export async function POST(request: Request) {
   try {
@@ -16,19 +11,49 @@ export async function POST(request: Request) {
       );
     }
 
-    const response = await openai.responses.create({
-      model: "gpt-5-mini",
-      input: message,
-    });
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": process.env.GEMINI_API_KEY || "",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: message,
+                },
+              ],
+            },
+          ],
+        }),
+      }
+    );
 
-    return NextResponse.json({
-      reply: response.output_text,
-    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Gemini error:", data);
+
+      return NextResponse.json(
+        { error: "Gemini API request failed" },
+        { status: 500 }
+      );
+    }
+
+    const reply =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Sorry, I couldn't generate a response.";
+
+    return NextResponse.json({ reply });
   } catch (error) {
-    console.error("OpenAI error:", error);
+    console.error("Chat error:", error);
 
     return NextResponse.json(
-      { error: "Failed to get response from OpenAI" },
+      { error: "Failed to get response from Gemini" },
       { status: 500 }
     );
   }
