@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 declare global {
   interface Window {
@@ -21,6 +21,7 @@ export default function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [listening, setListening] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -71,93 +72,24 @@ export default function ChatWidget() {
     recognition.onend = () => setListening(false);
   }
 
-  // AI Responses
-  function getReply(question: string) {
-    const q = question.toLowerCase().trim();
+  // Send message to OpenAI through our secure Vercel API
+  async function sendMessage() {
+    const question = input.trim();
 
-    // Greetings
-    if (["hi", "hello", "hey", "hii"].includes(q))
-      return "Hello! 👋 Welcome to HexCoded. How can I help you today?";
+    if (!question || loading) return;
 
-    if (q.includes("good morning"))
-      return "Good morning! ☀️ I hope you're having a wonderful day. How can I help you with HexCoded?";
+    const userMessage: Message = {
+      sender: "user",
+      text: question,
+    };
 
-    if (q.includes("good afternoon"))
-      return "Good afternoon! 😊 I'm here to answer any questions about HexCoded.";
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setLoading(true);
 
-    if (q.includes("good evening"))
-      return "Good evening! 🌆 Welcome to HexCoded. How may I assist you?";
+    // Open demo calendar for booking requests
+    const q = question.toLowerCase();
 
-    if (q.includes("good night"))
-      return "Good night! 🌙 Thanks for visiting HexCoded. Have a wonderful evening!";
-
-    // Small talk
-    if (q.includes("how are you"))
-      return "I'm doing great! 😊 I'm here to help you explore HexCoded and its AI filmmaking workflow.";
-
-    if (q.includes("who are you"))
-      return "I'm Hex Guide, the AI assistant for HexCoded. I can explain the platform and help you schedule a live demo.";
-
-    if (q.includes("thank"))
-      return "You're very welcome! If you'd like, I can also help you book a live demo.";
-
-    if (q === "bye" || q.includes("goodbye"))
-      return "Goodbye! 👋 Have a fantastic day, and thanks for exploring HexCoded.";
-
-    // HexCoded
-    if (
-      q.includes("what is hexcoded") ||
-      q.includes("about hexcoded") ||
-      q.includes("what does hexcoded do")
-    ) {
-      return "HexCoded is an AI studio that creates short dramas, vertical series and short films while maintaining character and visual consistency across an entire season.";
-    }
-
-    if (
-      q.includes("character consistency") ||
-      q.includes("same character") ||
-      q.includes("consistent character")
-    ) {
-      return "Character consistency means keeping the same face, hairstyle, wardrobe and visual identity throughout every episode of a series.";
-    }
-
-    if (
-      q.includes("who is it for") ||
-      q.includes("studio") ||
-      q.includes("filmmaker") ||
-      q.includes("editor")
-    ) {
-      return "HexCoded is built for studios, AI filmmakers, editors and content teams producing long-form content.";
-    }
-
-    if (
-      q.includes("short drama") ||
-      q.includes("vertical series") ||
-      q.includes("short film")
-    ) {
-      return "HexCoded specializes in AI-generated short dramas, vertical series and short films designed for episodic storytelling.";
-    }
-
-    // Competitors
-    if (
-      q.includes("ltx") ||
-      q.includes("openart") ||
-      q.includes("magnific") ||
-      q.includes("imagineart")
-    ) {
-      return "HexCoded is often compared with those platforms. Detailed comparisons are demonstrated during the live demo.";
-    }
-
-    // Pricing
-    if (
-      q.includes("price") ||
-      q.includes("pricing") ||
-      q.includes("cost")
-    ) {
-      return "Pricing is discussed only during the live demo with the HexCoded team.";
-    }
-
-    // Demo Booking
     if (
       q.includes("book") ||
       q.includes("demo") ||
@@ -167,38 +99,69 @@ export default function ChatWidget() {
     ) {
       window.open(CAL_LINK, "_blank");
 
-      return "Perfect! I've opened the HexCoded demo calendar. Please choose a convenient time for your meeting.";
+      const botReply =
+        "Perfect! I've opened the HexCoded demo calendar. Please choose a convenient time for your meeting.";
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "bot",
+          text: botReply,
+        },
+      ]);
+
+      speak(botReply);
+      setLoading(false);
+      return;
     }
 
-    // Default
-    return "I'd love to help! You can ask me about HexCoded, AI series production, character consistency, studio workflow, or booking a live demo.";
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: question,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to get response");
+      }
+
+      const botReply = data.reply;
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "bot",
+          text: botReply,
+        },
+      ]);
+
+      speak(botReply);
+    } catch (error) {
+      console.error("Chat error:", error);
+
+      const errorMessage =
+        "Sorry, I'm having trouble connecting right now. Please try again.";
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "bot",
+          text: errorMessage,
+        },
+      ]);
+
+      speak(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   }
-
-  function sendMessage() {
-    if (!input.trim()) return;
-
-    const userMessage: Message = {
-      sender: "user",
-      text: input,
-    };
-
-    const botReply = getReply(input);
-
-    const botMessage: Message = {
-      sender: "bot",
-      text: botReply,
-    };
-
-    setMessages((prev) => [...prev, userMessage, botMessage]);
-
-    speak(botReply);
-
-    setInput("");
-  }
-
-  useEffect(() => {
-    if (!input) return;
-  }, [input]);
 
   return (
     <>
@@ -243,6 +206,12 @@ export default function ChatWidget() {
                 {msg.text}
               </div>
             ))}
+
+            {loading && (
+              <div className="max-w-[85%] rounded-2xl bg-zinc-800 px-3 py-2 text-sm text-white">
+                Thinking... 🤖
+              </div>
+            )}
           </div>
 
           {/* Input */}
@@ -252,16 +221,20 @@ export default function ChatWidget() {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) =>
-                  e.key === "Enter" && sendMessage()
-                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    sendMessage();
+                  }
+                }}
                 placeholder="Type or use the mic..."
+                disabled={loading}
                 className="flex-1 rounded-xl bg-zinc-800 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-500"
               />
 
               {/* Mic */}
               <button
                 onClick={startListening}
+                disabled={loading}
                 className={`rounded-xl px-3 text-xl ${
                   listening
                     ? "bg-red-500 text-white"
@@ -275,6 +248,7 @@ export default function ChatWidget() {
               {/* Send */}
               <button
                 onClick={sendMessage}
+                disabled={loading}
                 className="rounded-xl bg-yellow-400 px-4 font-bold text-black"
               >
                 Send
@@ -284,7 +258,9 @@ export default function ChatWidget() {
             <p className="mt-2 text-center text-xs text-zinc-500">
               {listening
                 ? "Listening..."
-                : "Voice input & AI voice enabled"}
+                : loading
+                  ? "Hex Guide is thinking..."
+                  : "Voice input & AI voice enabled"}
             </p>
           </div>
         </div>
